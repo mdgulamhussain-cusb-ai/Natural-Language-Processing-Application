@@ -1,0 +1,33 @@
+
+nlp-text-classification/
+│
+├── data/
+│   ├── raw/
+│   │   └── text_data.csv
+│   └── processed/
+│       └── cleaned_text_data.csv
+│
+├── embeddings/
+│   └── glove.6B.100d.txt
+│
+├── notebooks/
+│   └── eda_text_analysis.ipynb
+│
+├── models/
+│   └── nlp_text_classification_model.h5
+│
+├── src/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── data_loader.py
+│   ├── preprocessing.py
+│   ├── embeddings.py
+│   ├── model.py
+│   ├── train.py
+│   ├── evaluate.py
+│   └── predict.py
+│
+├── main.py
+├── requirements.txt
+├── README.md
+└── .gitignore
