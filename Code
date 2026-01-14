@@ -1,0 +1,131 @@
+!pip install tensorflow nltk pandas numpy scikit-learn
+
+import nltk
+nltk.download("punkt")
+nltk.download("stopwords")
+nltk.download("wordnet")
+
+import numpy as np
+import pandas as pd
+import re
+
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import classification_report, f1_score
+
+import tensorflow as tf
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Embedding, LSTM, Dense, Dropout
+from tensorflow.keras.optimizers import Adam
+
+data = pd.read_csv("text_data.csv")
+print(data.head())
+
+stop_words = set(stopwords.words("english"))
+lemmatizer = WordNetLemmatizer()
+
+def clean_text(text):
+    text = text.lower()
+    text = re.sub(r"[^a-z\s]", "", text)
+    tokens = nltk.word_tokenize(text)
+    tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
+    return " ".join(tokens)
+
+data["clean_text"] = data["text"].apply(clean_text)
+
+label_encoder = LabelEncoder()
+data["label_encoded"] = label_encoder.fit_transform(data["label"])
+
+
+# Setting token-size
+MAX_WORDS = 10000
+MAX_LEN = 100
+
+tokenizer = Tokenizer(num_words=MAX_WORDS, oov_token="<OOV>")
+tokenizer.fit_on_texts(data["clean_text"])
+
+sequences = tokenizer.texts_to_sequences(data["clean_text"])
+padded_sequences = pad_sequences(sequences, maxlen=MAX_LEN, padding="post")
+
+EMBEDDING_DIM = 100
+embedding_index = {}
+
+with open("glove.6B.100d.txt", encoding="utf8") as f:
+    for line in f:
+        values = line.split()
+        word = values[0]
+        vector = np.asarray(values[1:], dtype="float32")
+        embedding_index[word] = vector
+
+word_index = tokenizer.word_index
+embedding_matrix = np.zeros((MAX_WORDS, EMBEDDING_DIM))
+
+for word, idx in word_index.items():
+    if idx < MAX_WORDS:
+        vector = embedding_index.get(word)
+        if vector is not None:
+            embedding_matrix[idx] = vector
+
+X_train, X_test, y_train, y_test = train_test_split(
+    padded_sequences,
+    data["label_encoded"],
+    test_size=0.2,
+    random_state=42,
+    stratify=data["label_encoded"]
+)
+
+# build NLP model
+model = Sequential([
+    Embedding(
+        input_dim=MAX_WORDS,
+        output_dim=EMBEDDING_DIM,
+        weights=[embedding_matrix],
+        input_length=MAX_LEN,
+        trainable=False  # Transfer Learning
+    ),
+    LSTM(64, return_sequences=False),
+    Dropout(0.5),
+    Dense(32, activation="relu"),
+    Dense(len(label_encoder.classes_), activation="softmax")
+])
+
+model.compile(
+    optimizer=Adam(learning_rate=0.001),
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+model.summary()
+
+
+# Training model
+model.fit(
+    X_train,
+    y_train,
+    epochs=10,
+    batch_size=32,
+    validation_split=0.1,
+    verbose=1
+)
+
+# Evaluate 
+
+predictions = model.predict(X_test)
+y_pred = np.argmax(predictions, axis=1)
+
+f1 = f1_score(y_test, y_pred, average="macro")
+
+print("F1-Score:", f1)
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred))
+
+
+model.save("nlp_text_classification_model.h5")
+print("NLP model saved successfully!")
+
